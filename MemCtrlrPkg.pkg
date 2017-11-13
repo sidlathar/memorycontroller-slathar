@@ -1,0 +1,16 @@
+`ifndef MEM_CTRLR_PKG
+  `define MEM_CTRLR_PKG
+
+  package MemCtrlrPkg;
+    typedef struct {
+      logic cs_n;
+      logic ras_n;
+      logic cas_n;
+      logic we_n;
+      logic [1:0] ba;
+      logic [11:0] addr;
+    } command_t;
+  endpackage : memCtrlPkg
+
+  import MemCtrlrPkg::*;
+`endif
