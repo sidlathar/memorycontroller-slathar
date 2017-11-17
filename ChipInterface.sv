@@ -1,5 +1,5 @@
 `default_nettype none
-`include "mem_ctrlr.svh"
+`include "MemCtrlr.svh"
 
 //////
 ////// Memory Controller 18-341
