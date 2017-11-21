@@ -10,7 +10,7 @@
       logic [1:0] ba;
       logic [11:0] addr;
     } command_t;
-  endpackage : memCtrlPkg
+  endpackage : MemCtrlPkg
 
   import MemCtrlrPkg::*;
 `endif
