@@ -118,17 +118,19 @@ analysis as well, so this is critical to ensure your project works properly.
 If you've done this then (after you've synthesized), the Compilation Report
 -> TimeQuest Timing Analyzer -> Clocks should show three lines, like so:
 
-```
 ![Clocks Report](./images/clocks_report.png "The clocks report in TimeQuest Analyzer")
-```
 
 Wow, that was easy!
 
 ## The SDRAM Interface
 
-The SDRAM chip is connected to your FPGA using the signals shown in the figure
-at right (taken from the DE0 User's Manual, which you've already devoured,
-right?). You probably understand what the address (`A`) and data (`D`)
+The SDRAM chip is connected to your FPGA using the signals shown in this figure
+ (taken from the DE0 User's Manual, which you've already devoured,
+right?). 
+
+![SDRAM Interface](./images/cyclone3_sdram_interface.png)
+
+You probably understand what the address (`A`) and data (`D`)
 buses are for.  Same with write enable (`nWE`) and clock (`CLK`).  Are you
 sure?  And what about all those other signals?  A quick look at the data sheet
 (page 2) gives names (Clock Enable, Row Address Strobe, DQ Mask Enable, Bank
