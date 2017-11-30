@@ -161,7 +161,6 @@ module HWTB (
       PHASE0_RD: begin
         if (tick_count[0] == 32'hff_ff_ff_ff) begin
           clr_issued_count = 1'b1;
-          clr_completed_count = 1'b1;
           clr_tick_count = 1'b1;
           clr_correct_count = 1'b1;
           next_state = TIMEOUT;
@@ -176,9 +175,11 @@ module HWTB (
           end
 
           if (data_in_valid) begin
+            inc_correct_count[0] = data_in == 16'hbe_ef;
+
             phase1_start = 1'b1;
 
-            inc_correct_count[0] = data_in == 16'hbe_ef;
+            clr_correct_count = 1'b1;
             next_state = PHASE1_WR;
           end
         end
