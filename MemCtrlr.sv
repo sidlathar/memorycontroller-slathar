@@ -5,7 +5,7 @@ module MemCtrlr (
 
 	output logic ready,
 	input logic we, re,
-	input logic [21:0] addr,
+	input logic [21:0] addr,   //B1 B0...R11 R0...C8 C0
 	input logic [15:0] data_in,
 
 	output logic [15:0] data_out,
@@ -29,20 +29,21 @@ module MemCtrlr (
 	logic [2:0] CAS_LATENCY, BURST_LEN;
 	logic [6:0] MRS_OPTIONS;
 
-	logic DQM_H, PALL, REF, MRS;
+	logic DQM_H, PALL, REF, MRS, NOP_INIT;
+	logic ready_init;
 
 	/************************************ FSM ***********************************/
 
-	enum logic [3:0] {INIT, POWERUP_WAIT, PRECHARGE,
+	enum logic [4:0] {INIT, POWERUP_WAIT, PRECHARGE,
 	                TRP_WAIT, 
 	                AUTO_REF_1, AUTO_REF_2, AUTO_REF_3, AUTO_REF_4,
 	                AUTO_REF_5, AUTO_REF_6, AUTO_REF_7, AUTO_REF_8,
-	                MODE_REG_SET} currState, nextState;
+	                MODE_REG_SET, WAIT1, WAIT2} currState, nextState;
 
 	//NS logic
 
 	always_comb begin
-		{DQM_H, PALL, REF, MRS, clk_cnt_inc, clk_cnt_clr} = 'b000000
+		{DQM_H, PALL, REF, MRS, clk_cnt_inc, clk_cnt_clr, NOP_INIT} = 'b0000001
 		case (currState)
 			INIT: begin
 				if(init_start) begin
@@ -203,12 +204,20 @@ module MemCtrlr (
 			end
 			
 			MODE_REG_SET: begin
-				CAS_LATENCY = 3'b010;
-				BURST_LEN = 3'b0;
-				WT = 1'b0;
-				MRS_OPTIONS = 6'b0;   //$$$$$$$$$$$$$$$-CHANGE-$$$$$$$$$$$$$//
 
-				nextState = INIT; 
+				nextState = WAIT1;
+
+			end
+
+			WAIT1: begin
+				
+				nextState = WAIT2;
+			end
+
+			WAIT2: begin
+				ready_init = 1;
+
+				nextState = INIT;
 			end
 		endcase // currState
 	end
@@ -218,7 +227,7 @@ module MemCtrlr (
 	//WRITE START
 	logic clk_cnt_inc_w, clk_cnt_clr_w;
 	logic [31:0] clk_cnt_w;
-	logic ACT_W, WRITEA;
+	logic ACT_W, WRITEA, NOP_W;
 
 	logic load_data; //load for data and address of write
 	logic ready_w; //ready to write
@@ -227,18 +236,19 @@ module MemCtrlr (
 
 	enum logic [2:0] {IDLE_W, LOAD_DATA_W, ACTIVATE_W, DO_WRITE} currState_w, nextState_w;
 
-	//NS logic
+	//NS logig
 
 	always_comb begin
-		{load_data, ready_w, WRITEA, ACT_W} = 4'b0000;
+		{load_data, ready_w, WRITEA, ACT_W, NOP_W} = 5'b0000_1;
 		case (currState_w)
 			IDLE_W: begin
-				if(!we) begin
+				if(!we && writing) begin
 					ready_w = 1;
 
 					nextState_w = IDLE_W;
 				end
 				else begin
+					phase_cnt_inc_w = 1;
 					load_data = 1;
 
 					nextState_w = LOAD_DATA_W;
@@ -281,13 +291,14 @@ module MemCtrlr (
 		endcase // currState_w
 	end
 
+
 	//END WRITE
 
 
 	//READ START
 	logic clk_cnt_inc_r, clk_cnt_clr_r;
 	logic [31:0] clk_cnt_r;
-	logic ACT_R, READA;
+	logic ACT_R, READA, NOP_R;
 
 	logic load_data_addr; //load for address of read
 	logic ready_r; //ready to read
@@ -299,16 +310,17 @@ module MemCtrlr (
 	//NS logic
 
 	always_comb begin
-		{load_data_addr, ready_r, ACT_R, READA} = 4'b0000;
+		{load_data_addr, ready_r, ACT_R, READA, NOP_R} = 5'b0000_1;
 		case (currState_r)
 			IDLE_R: begin
-				if(!re) begin
+				if(!re && reading) begin
 					ready_r = 1;
 
 					nextState_r = IDLE_R;
 				end
 				else begin
 					load_data_addr = 1;
+					phase_cnt_inc_r = 1;
 
 					nextState_r = LOAD_DATA_R;
 				end
@@ -352,6 +364,156 @@ module MemCtrlr (
 
 	//END READ
 
+
+	//FSM FOR PHASE
+
+	logic [31:0] phase_cnt;
+	logic phase_cnt_inc_r, phase_cnt_inc_w;
+	logic phase_cnt_clr;
+
+	enum logic [3:0] {IDLE_P, PH0_W, PH0_R, PH1_W, PH1_R,
+							PH2_W, PH2_R, PH3_W, PH4_R, STOP} currState_p, nextState_p;
+
+	always_comb begin
+		{phase_cnt_clr, writing, reading} = 3'b000;
+		case (currState_p)
+			IDLE_P: begin
+				if(ready_init) begin
+					phase_cnt_clr = 1;
+
+					nextState = PH0_W;
+				end
+				else begin
+
+					nextState_p = IDLE_P;
+				end
+			end
+
+			PH0_W: begin
+				if(phase_cnt == 32'b1) begin
+					phase_cnt_clr = 1;
+
+					nextState_p = PH0_R;
+				end
+				else begin
+					writing = 1;
+
+					nextState_p = PH0_W;
+				end
+			end
+
+			PH0_R: begin
+				if(phase_cnt == 32'b1) begin
+					phase_cnt_clr = 1;
+					
+					nextState_p = PH1_W;
+				end
+				else begin
+					reading = 1;
+
+					nextState_p = PH0_R;
+				end
+			end
+
+			//*************PHASE 0 DONE****************//
+
+			PH1_W: begin
+				if(phase_cnt == 32'b10) begin
+					phase_cnt_clr = 1;
+
+					nextState_p = PH1_R;
+				end
+				else begin
+					writing = 1;
+
+					nextState_p = PH1_W;
+				end
+			end
+
+			PH1_R: begin
+				if(phase_cnt == 32'b10) begin
+					phase_cnt_clr = 1;
+
+					nextState_p = PH2_W;
+				end
+				else begin
+					reading = 1;
+
+					nextState_p = PH1_R;
+				end
+			end
+
+			//*************PHASE 1 DONE****************//
+
+			PH2_W: begin
+				if(phase_cnt == 32'b1000) begin
+					phase_cnt_clr = 1;
+
+					nextState_p = PH2_R;
+				end
+				else begin
+					writing = 1;
+
+					nextState_p = PH2_W;
+				end
+			end
+
+			PH2_R: begin
+				if(phase_cnt == 32'b1000) begin
+					phase_cnt_clr = 1;
+
+					nextState_p = PH3_W;
+				end
+				else begin
+					reading = 1;
+
+					nextState_p = PH2_R;
+				end
+			end
+
+			//*************PHASE 2 DONE****************//
+
+			PH3_W: begin
+				if(phase_cnt == 32'b1000) begin
+					phase_cnt_clr = 1;
+
+					nextState_p = PH3_R;
+				end
+				else begin
+					writing = 1;
+
+					nextState_p = PH3_W;
+				end
+			end
+
+			PH3_R: begin
+				if(phase_cnt == 32'b1000) begin
+					phase_cnt_clr = 1;
+
+					nextState_p = STOP;
+				end
+				else begin
+					reading = 1;
+
+					nextState_p = PH3_R;
+				end
+			end
+
+			STOP: begin
+				if(~reset_n) begin
+					nextState_p = IDLE_P;
+				end
+				else begin
+					nextState_p = STOP;
+				end
+			end
+
+		endcase // currState_p
+	end
+
+
+	assign ready = (ready_w || ready_r);
+
 	//CLK CNT FOR INIT
 	always_ff @(posedge clock, negedge reset_n) begin
 		if(~reset_n) begin
@@ -394,6 +556,20 @@ module MemCtrlr (
 		end
 	end
 
+	//PHASE COUNT
+	always_ff @(posedge clock, negedge reset_n) begin
+		if(~reset_n) begin
+			 phase_cnt <= 0;
+		end else begin
+			 if(phase_cnt_inc_r || phase_cnt_inc_w) begin
+			 	phase_cnt <= phase_cnt + 1;
+			 end
+			 else if(phase_cnt_clr) begin
+			 	phase_cnt <= 0;
+			 end
+		end
+	end
+
 
 	//ADDRESS LOAD FOR READ AND WRITE
 	logic [21:0] addr_reg;
@@ -419,37 +595,130 @@ module MemCtrlr (
 		end
 	end
 
+
+	// inout wire [15:0] DRAM_DQ,
+	// output logic [11:0] DRAM_ADDR,
+	// output logic DRAM_BA_0, DRAM_BA_1,
+	// output logic DRAM_LDQM, DRAM_UDQM,
+	// output logic DRAM_WE_N, DRAM_CAS_N, DRAM_RAS_N,
+	// output logic DRAM_CS_N
+
 	//SYNCHRONOUS OUTPUTS
 	always_ff @(posedge clock, negedge reset_n) begin
-		if(~reset_n) begin
-			//OUTPUTS HERE
+		if(~reset_n) begin  //RESET TO NOP
+			DRAM_CS_N <= 1'b0;
+			DRAM_RAS_N <= 1'b1;
+			DRAM_CAS_N <= 1'b1;
+			DRAM_WE_N <= 1'b1;
 		end else begin
+
 			if(DQM_H) begin
-				//OUTPUTS HERE
+				DRAM_UDQM <= 1'b1;
+				DRAM_LDQM <= 1'b1;
 			end
+
 			else if(PALL) begin
-				//OUTPUTS HERE
+				DRAM_CS_N <= 1'b0;
+				DRAM_RAS_N <= 1'b0;
+				DRAM_CAS_N <= 1'b1;
+				DRAM_WE_N <= 1'b0;
+				DRAM_ADDR[10] <= 1'b1;
 			end
+
 			else if(REF) begin
-				//OUTPUTS HERE
+				DRAM_CS_N <= 1'b0;
+				DRAM_RAS_N <= 1'b0;
+				DRAM_CAS_N <= 1'b0;
+				DRAM_WE_N <= 1'b1;
 			end
+
 			else if(MRS) begin
-				//OUTPUTS HERE
+				DRAM_CS_N <= 1'b0;
+				DRAM_RAS_N <= 1'b0;
+				DRAM_CAS_N <= 1'b0;
+				DRAM_WE_N <= 1'b0;
+				DRAM_ADDR[10] <= 1'b0;
+
+				DRAM_ADDR[6:4] <= 3'b010; //CAS LATENCY
+				DRAM_ADDR[2:0] <= 3'b000; //BURST OF ONE
+				DRAM_ADDR[3]  <= 1'b0; //WRAP TYPE SEQ
+				DRAM_ADDR[11:7] <= 4'b00000; //OPTIONS?
 			end
+
 			else if(ACT_W) begin
-				//OUTPUTS HERE
+				DRAM_CS_N <= 1'b0;
+				DRAM_RAS_N <= 1'b0;
+				DRAM_CAS_N <= 1'b1;
+				DRAM_WE_N <= 1'b1;
+
+				//BANK ADDR
+				DRAM_BA_1 <= addr_reg[21]; 
+				DRAM_BA_0 <= addr_reg[20];
+			
+				//ROW ADDR
+				DRAM_ADDR[11:0] <= addr_reg[19:8];
 			end
+
 			else if(WRITEA) begin
-				//OUTPUTS HERE
+				DRAM_CS_N <= 1'b0;
+				DRAM_RAS_N <= 1'b1;
+				DRAM_CAS_N <= 1'b0;
+				DRAM_WE_N <= 1'b0;
+				DRAM_ADDR[10] <= 1'b1;
+
+				//BANK ADDR
+				DRAM_BA_1 <= addr_reg[21]; 
+				DRAM_BA_0 <= addr_reg[20];
+
+				//COLUMN ADDR
+				DRAM_ADDR[11:0] <= addr_reg[7:0];
 			end
+
 			else if(ACT_R) begin
-				//OUTPUTS HERE
+				DRAM_CS_N <= 1'b0;
+				DRAM_RAS_N <= 1'b0;
+				DRAM_CAS_N <= 1'b1;
+				DRAM_WE_N <= 1'b1;
+
+				//BANK ADDR
+				DRAM_BA_1 <= addr_reg[21]; 
+				DRAM_BA_0 <= addr_reg[20];
+			
+				//ROW ADDR
+				DRAM_ADDR[11:0] <= addr_reg[19:8];
 			end
+
 			else if(READA) begin
-				//OUTPUTS HERE
+				DRAM_CS_N <= 1'b0;
+				DRAM_RAS_N <= 1'b1;
+				DRAM_CAS_N <= 1'b0;
+				DRAM_WE_N <= 1'b1;
+				DRAM_ADDR[10] <= 1'b1;
+
+				//COULMN ADDR
+				DRAM_ADDR[7:0] <= addr_reg[7:0];
+			end
+
+			else if(NOP_INIT) begin
+				DRAM_CS_N <= 1'b0;
+				DRAM_RAS_N <= 1'b1;
+				DRAM_CAS_N <= 1'b1;
+				DRAM_WE_N <= 1'b1;
+			end
+
+			else if(NOP_W) begin
+				DRAM_CS_N <= 1'b0;
+				DRAM_RAS_N <= 1'b1;
+				DRAM_CAS_N <= 1'b1;
+				DRAM_WE_N <= 1'b1;
+			end
+
+			else if(NOP_R) begin
+				DRAM_CS_N <= 1'b0;
+				DRAM_RAS_N <= 1'b1;
+				DRAM_CAS_N <= 1'b1;
+				DRAM_WE_N <= 1'b1;
 			end
 		end
 	end
-
-
 endmodule: MemCtrlr // MemCtrlr
