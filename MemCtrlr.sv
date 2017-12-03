@@ -651,7 +651,7 @@ module MemCtrlr (
 			data_reg <= 0;
 		end else begin
 			if(we) begin
-				data_reg <= data_out;
+				data_reg <= data_in;
 			end
 		end
 	end
