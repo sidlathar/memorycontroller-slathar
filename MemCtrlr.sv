@@ -1,4 +1,5 @@
 `default_nettype none
+`include "MemCtrlr.svh"
 
 module MemCtrlr (
 	input logic clock, reset_n,
@@ -21,7 +22,6 @@ module MemCtrlr (
 	output logic DRAM_WE_N, DRAM_CAS_N, DRAM_RAS_N,
 	output logic DRAM_CS_N);
 
-
 	//INITIALIZE START
 	logic clk_cnt_inc, clk_cnt_clr;
 	logic [31:0] clk_cnt;
@@ -43,7 +43,7 @@ module MemCtrlr (
 	//NS logic
 
 	always_comb begin
-		{DQM_H, PALL, REF, MRS, clk_cnt_inc, clk_cnt_clr, NOP_INIT} = 'b0000001
+		{DQM_H, PALL, REF, MRS, clk_cnt_inc, clk_cnt_clr, NOP_INIT} = 'b0000001;
 		case (currState)
 			INIT: begin
 				if(init_start) begin
@@ -58,7 +58,7 @@ module MemCtrlr (
 			end
 
 			POWERUP_WAIT: begin
-				if(clk_cnt != T_POWERUP) begin
+				if(clk_cnt != `T_POWERUP) begin
 					clk_cnt_inc = 1;
 
 					nextState = POWERUP_WAIT;
@@ -78,7 +78,7 @@ module MemCtrlr (
 			end
 
 			TRP_WAIT: begin
-				if(clk_cnt != T_RP) begin
+				if(clk_cnt != `T_RP) begin
 					clk_cnt_inc = 1;
 
 					nextState = TRP_WAIT;
@@ -92,7 +92,7 @@ module MemCtrlr (
 			end
 
 			AUTO_REF_1: begin
-				if(clk_cnt != T_RC) begin
+				if(clk_cnt != `T_RC) begin
 					clk_cnt_inc = 1;
 
 					nextState = AUTO_REF_1;
@@ -106,7 +106,7 @@ module MemCtrlr (
 			end
 
 			AUTO_REF_2: begin
-				if(clk_cnt != T_RC) begin
+				if(clk_cnt != `T_RC) begin
 					clk_cnt_inc = 1;
 
 					nextState = AUTO_REF_2;
@@ -120,7 +120,7 @@ module MemCtrlr (
 			end
 
 			AUTO_REF_3: begin
-				if(clk_cnt != T_RC) begin
+				if(clk_cnt != `T_RC) begin
 					clk_cnt_inc = 1;
 
 					nextState = AUTO_REF_3;
@@ -134,7 +134,7 @@ module MemCtrlr (
 			end
 
 			AUTO_REF_4: begin
-				if(clk_cnt != T_RC) begin
+				if(clk_cnt != `T_RC) begin
 					clk_cnt_inc = 1;
 
 					nextState = AUTO_REF_4;
@@ -148,7 +148,7 @@ module MemCtrlr (
 			end
 
 			AUTO_REF_5: begin
-				if(clk_cnt != T_RC) begin
+				if(clk_cnt != `T_RC) begin
 					clk_cnt_inc = 1;
 
 					nextState = AUTO_REF_5;
@@ -162,7 +162,7 @@ module MemCtrlr (
 			end
 
 			AUTO_REF_6: begin
-				if(clk_cnt != T_RC) begin
+				if(clk_cnt != `T_RC) begin
 					clk_cnt_inc = 1;
 
 					nextState = AUTO_REF_6;
@@ -176,7 +176,7 @@ module MemCtrlr (
 			end
 
 			AUTO_REF_7: begin
-				if(clk_cnt != T_RC) begin
+				if(clk_cnt != `T_RC) begin
 					clk_cnt_inc = 1;
 
 					nextState = AUTO_REF_7;
@@ -190,7 +190,7 @@ module MemCtrlr (
 			end
 
 			AUTO_REF_8: begin
-				if(clk_cnt != T_RC) begin
+				if(clk_cnt != `T_RC) begin
 					clk_cnt_inc = 1;
 
 					nextState = AUTO_REF_8;
@@ -224,155 +224,15 @@ module MemCtrlr (
 
 	//END INITIALIZE
 
-	//WRITE START
-	logic clk_cnt_inc_w, clk_cnt_clr_w;
-	logic [31:0] clk_cnt_w;
-	logic ACT_W, WRITEA, NOP_W;
 
-	logic load_data; //load for data and address of write
-	logic ready_w; //ready to write
-
-	/************************************ FSM ***********************************/
-
-	enum logic [2:0] {IDLE_W, LOAD_DATA_W, ACTIVATE_W, DO_WRITE} currState_w, nextState_w;
-
-	//NS logig
-
-	always_comb begin
-		{load_data, ready_w, WRITEA, ACT_W, NOP_W} = 5'b0000_1;
-		case (currState_w)
-			IDLE_W: begin
-				if(!we && writing) begin
-					ready_w = 1;
-
-					nextState_w = IDLE_W;
-				end
-				else begin
-					phase_cnt_inc_w = 1;
-					load_data = 1;
-
-					nextState_w = LOAD_DATA_W;
-				end
-			end
-
-			LOAD_DATA_W: begin
-				ACT_W = 1;
-				clk_cnt_clr_w = 1;
-
-				nextState_w = ACTIVATE_W;
-			end
-
-			ACTIVATE_W: begin
-				if(clk_cnt != T_RCD) begin
-					clk_cnt_inc_w = 1;
-
-					nextState_w = ACTIVATE_W;
-				end
-				else begin
-					WRITEA = 1;
-					clk_cnt_clr_w = 1;
-
-					nextState_w = DO_WRITE;
-				end
-			end
-
-			DO_WRITE: begin
-				if(clk_cnt != T_RC - T_RCD) begin
-					clk_cnt_inc_w = 1;
-
-					nextState_w = DO_WRITE;
-				end
-				else begin
-					ready_w = 1;
-
-					nextState_w = IDLE_W;
-				end
-			end
-		endcase // currState_w
-	end
-
-
-	//END WRITE
-
-
-	//READ START
-	logic clk_cnt_inc_r, clk_cnt_clr_r;
-	logic [31:0] clk_cnt_r;
-	logic ACT_R, READA, NOP_R;
-
-	logic load_data_addr; //load for address of read
-	logic ready_r; //ready to read
-
-	/************************************ FSM ***********************************/
-
-	enum logic [2:0] {IDLE_R, LOAD_DATA_R, ACTIVATE_R, DO_READ} currState_r, nextState_r;
-
-	//NS logic
-
-	always_comb begin
-		{load_data_addr, ready_r, ACT_R, READA, NOP_R} = 5'b0000_1;
-		case (currState_r)
-			IDLE_R: begin
-				if(!re && reading) begin
-					ready_r = 1;
-
-					nextState_r = IDLE_R;
-				end
-				else begin
-					load_data_addr = 1;
-					phase_cnt_inc_r = 1;
-
-					nextState_r = LOAD_DATA_R;
-				end
-			end
-
-			LOAD_DATA_R: begin
-				ACT_R = 1;
-				clk_cnt_clr_r = 1;
-
-				nextState_r = ACTIVATE_R;
-			end
-
-			ACTIVATE_R: begin
-				if(clk_cnt != T_RCD) begin
-					clk_cnt_inc_r = 1;
-
-					nextState_r = ACTIVATE_R;
-				end
-				else begin
-					READA = 1;
-					clk_cnt_clr_r = 1;
-
-					nextState_r = DO_READ;
-				end
-			end
-			
-			DO_READ: begin
-				if(clk_cnt != T_RC - T_RCD) begin
-					clk_cnt_inc_r = 1;
-
-					nextState_r = DO_READ;
-				end
-				else begin
-					ready_r = 1;
-
-					nextState_r = IDLE_R;
-				end
-			end
-		endcase // currState_r
-	end
-
-	//END READ
-
-
-	//FSM FOR PHASE
+	//*******************PHASE TRACKING***********************//
 
 	logic [31:0] phase_cnt;
 	logic phase_cnt_inc_r, phase_cnt_inc_w;
-	logic phase_cnt_clr;
+	logic phase_cnt_clr, reading, writing;
 
 	enum logic [3:0] {IDLE_P, PH0_W, PH0_R, PH1_W, PH1_R,
-							PH2_W, PH2_R, PH3_W, PH4_R, STOP} currState_p, nextState_p;
+							PH2_W, PH2_R, PH3_W, PH3_R, STOP} currState_p, nextState_p;
 
 	always_comb begin
 		{phase_cnt_clr, writing, reading} = 3'b000;
@@ -381,7 +241,7 @@ module MemCtrlr (
 				if(ready_init) begin
 					phase_cnt_clr = 1;
 
-					nextState = PH0_W;
+					nextState_p = PH0_W;
 				end
 				else begin
 
@@ -415,7 +275,7 @@ module MemCtrlr (
 				end
 			end
 
-			//*************PHASE 0 DONE****************//
+			//PHASE 0 DONE
 
 			PH1_W: begin
 				if(phase_cnt == 32'b10) begin
@@ -443,7 +303,7 @@ module MemCtrlr (
 				end
 			end
 
-			//*************PHASE 1 DONE****************//
+			//PHASE 1 DONE
 
 			PH2_W: begin
 				if(phase_cnt == 32'b1000) begin
@@ -471,7 +331,7 @@ module MemCtrlr (
 				end
 			end
 
-			//*************PHASE 2 DONE****************//
+			//PHASE 2 DONE
 
 			PH3_W: begin
 				if(phase_cnt == 32'b1000) begin
@@ -499,6 +359,8 @@ module MemCtrlr (
 				end
 			end
 
+			//PHASE 3 DONE
+
 			STOP: begin
 				if(~reset_n) begin
 					nextState_p = IDLE_P;
@@ -511,6 +373,148 @@ module MemCtrlr (
 		endcase // currState_p
 	end
 
+
+	//****************WRITE***********************//
+
+	logic clk_cnt_inc_w, clk_cnt_clr_w;
+	logic [31:0] clk_cnt_w;
+	logic ACT_W, WRITEA, NOP_W;
+
+	logic load_data; //load for data and address of write
+	logic ready_w; //ready to write
+	logic send_write_data;
+
+	enum logic [2:0] {IDLE_W, LOAD_DATA_W, ACTIVATE_W, DO_WRITE} currState_w, nextState_w;
+
+	//NS logic
+
+	always_comb begin
+		{load_data, ready_w, send_write_data, WRITEA, ACT_W, NOP_W} = 6'b00000_1;
+		case (currState_w)
+			IDLE_W: begin
+				if(!we && writing) begin
+					ready_w = 1;
+
+					nextState_w = IDLE_W;
+				end
+				else begin
+					phase_cnt_inc_w = 1;
+					load_data = 1;
+
+					nextState_w = LOAD_DATA_W;
+				end
+			end
+
+			LOAD_DATA_W: begin
+				ACT_W = 1;
+				clk_cnt_clr_w = 1;
+
+				nextState_w = ACTIVATE_W;
+			end
+
+			ACTIVATE_W: begin
+				if(clk_cnt_w != `T_RCD) begin
+					clk_cnt_inc_w = 1;
+
+					nextState_w = ACTIVATE_W;
+				end
+				else begin
+					WRITEA = 1;
+					clk_cnt_clr_w = 1;
+					send_write_data = 1;
+					nextState_w = DO_WRITE;
+				end
+			end
+
+			DO_WRITE: begin
+				if(clk_cnt_w != `T_RC - `T_RCD) begin
+					clk_cnt_inc_w = 1;
+
+					nextState_w = DO_WRITE;
+				end
+				else begin
+					ready_w = 1;
+
+					nextState_w = IDLE_W;
+				end
+			end
+		endcase // currState_w
+	end
+
+
+	//END WRITE
+
+
+	//******************READ START******************//
+	logic clk_cnt_inc_r, clk_cnt_clr_r;
+	logic [31:0] clk_cnt_r;
+	logic ACT_R, READA, NOP_R;
+
+	logic load_data_addr; //load for address of read
+	logic ready_r; //ready to read
+	logic load_read_data;
+
+	enum logic [2:0] {IDLE_R, LOAD_DATA_R, ACTIVATE_R, DO_READ} currState_r, nextState_r;
+
+	//NS logic
+
+	always_comb begin
+		{load_data_addr, ready_r, load_read_data, ACT_R, READA, NOP_R} = 6'b00000_1;
+		case (currState_r)
+			IDLE_R: begin
+				if(!re && reading) begin
+					ready_r = 1;
+
+					nextState_r = IDLE_R;
+				end
+				else begin
+					load_data_addr = 1;
+					phase_cnt_inc_r = 1;
+
+					nextState_r = LOAD_DATA_R;
+				end
+			end
+
+			LOAD_DATA_R: begin
+				ACT_R = 1;
+				clk_cnt_clr_r = 1;
+
+				nextState_r = ACTIVATE_R;
+			end
+
+			ACTIVATE_R: begin
+				if(clk_cnt_r != `T_RCD) begin
+					clk_cnt_inc_r = 1;
+
+					nextState_r = ACTIVATE_R;
+				end
+				else begin
+					READA = 1;
+					clk_cnt_clr_r = 1;
+
+					nextState_r = DO_READ;
+				end
+			end
+			
+			DO_READ: begin
+				if(clk_cnt_r != `T_RC - `T_RCD) begin
+					if(clk_cnt_r == `CAS_LATENCY) begin
+						load_read_data = 1; 
+					end
+					clk_cnt_inc_r = 1;
+
+					nextState_r = DO_READ;
+				end
+				else begin
+					ready_r = 1;
+
+					nextState_r = IDLE_R;
+				end
+			end
+		endcase // currState_r
+	end
+
+	//END READ
 
 	assign ready = (ready_w || ready_r);
 
@@ -551,7 +555,7 @@ module MemCtrlr (
 			 	clk_cnt_w <= clk_cnt_w + 1;
 			 end
 			 else if(clk_cnt_clr_w) begin
-			 	clk_cnt_W <= 0;
+			 	clk_cnt_w <= 0;
 			 end
 		end
 	end
@@ -595,6 +599,21 @@ module MemCtrlr (
 		end
 	end
 
+	//DATA INOUT
+	always_ff @(posedge clock, negedge reset_n) begin
+		if(~reset_n) begin
+			DRAM_DQ <= 'Z;
+		end else begin 
+			if(load_read_data) begin
+				data_out <= DRAM_DQ;
+				data_out_valid <= 1;
+			end
+			else if(send_write_data) begin
+				DRAM_DQ <= data_reg;
+			end
+		end
+	end
+
 
 	// inout wire [15:0] DRAM_DQ,
 	// output logic [11:0] DRAM_ADDR,
@@ -606,10 +625,15 @@ module MemCtrlr (
 	//SYNCHRONOUS OUTPUTS
 	always_ff @(posedge clock, negedge reset_n) begin
 		if(~reset_n) begin  //RESET TO NOP
-			DRAM_CS_N <= 1'b0;
-			DRAM_RAS_N <= 1'b1;
-			DRAM_CAS_N <= 1'b1;
-			DRAM_WE_N <= 1'b1;
+			DRAM_CS_N <= 'bx;
+			DRAM_RAS_N <= 'bx;
+			DRAM_CAS_N <= 'bx;
+			DRAM_WE_N <= 'bx;
+			DRAM_LDQM <= 'bx;
+			DRAM_UDQM <= 'bx;
+			DRAM_BA_0 <= 'bx;
+			DRAM_BA_1 <= 'bx;
+			DRAM_ADDR <= 'bx;
 		end else begin
 
 			if(DQM_H) begin
@@ -639,10 +663,10 @@ module MemCtrlr (
 				DRAM_WE_N <= 1'b0;
 				DRAM_ADDR[10] <= 1'b0;
 
-				DRAM_ADDR[6:4] <= 3'b010; //CAS LATENCY
+				DRAM_ADDR[6:4] <= 3'b011; //CAS LATENCY
 				DRAM_ADDR[2:0] <= 3'b000; //BURST OF ONE
 				DRAM_ADDR[3]  <= 1'b0; //WRAP TYPE SEQ
-				DRAM_ADDR[11:7] <= 4'b00000; //OPTIONS?
+				DRAM_ADDR[11:7] <= 5'b00000; //OPTIONS?
 			end
 
 			else if(ACT_W) begin
